@@ -1,0 +1,34 @@
+name: Publish
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: read
+  id-token: write   # npm provenance / trusted publishing
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24, registry-url: "https://registry.npmjs.org" }
+      - run: npm ci
+      - name: Versions match the tag
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          for p in core node browser; do
+            pv=$(node -p "require('./packages/$p/package.json').version")
+            [ "$pv" = "$v" ] || { echo "packages/$p is $pv, tag is $v"; exit 1; }
+          done
+          grep -q "\"$v\"" packages/node/src/version.ts && grep -q "VERSION = \"$v\"" packages/browser/src/index.ts
+      - run: npm test
+      - name: Publish (core first)
+        run: |
+          for p in core node browser; do
+            name=$(node -p "require('./packages/$p/package.json').name")
+            if npm view "$name@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then echo "$name already published"; continue; fi
+            npm publish --workspace "packages/$p" --provenance --access public
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

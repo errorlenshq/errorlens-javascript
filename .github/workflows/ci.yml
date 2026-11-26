@@ -1,0 +1,27 @@
+name: CI
+on:
+  push: { branches: [main] }
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ matrix.node }}", cache: npm }
+      - uses: browser-actions/setup-chrome@v1
+        id: chrome
+      - run: npm ci
+      - run: npm test
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - name: No runtime dependencies besides @errorlenshq/core
+        run: |
+          for p in packages/*/package.json; do
+            node -e 'const d=require("./'"$p"'").dependencies||{};const bad=Object.keys(d).filter(k=>k!=="@errorlenshq/core");if(bad.length){console.error(process.argv[1],bad);process.exit(1)}' "$p"
+          done
