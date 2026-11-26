@@ -68,7 +68,11 @@ function osFromUa(ua: string): string {
 
 function frameUrls(event: ErrorLensEvent): string[] {
   const out: string[] = [];
-  for (const v of event.exception?.values || []) for (const f of v.stacktrace?.frames || []) if (f.abs_path || f.filename) out.push(f.abs_path || f.filename!);
+  // frames with a real script URL only (not "<anonymous>" eval code), so allow/deny lists judge the script that failed
+  for (const v of event.exception?.values || []) for (const f of v.stacktrace?.frames || []) {
+    const url = f.abs_path || f.filename;
+    if (url && /^(https?|blob|file|chrome-extension|moz-extension|safari(-web)?-extension):/.test(url)) out.push(url);
+  }
   return out;
 }
 

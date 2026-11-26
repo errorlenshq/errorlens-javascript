@@ -109,3 +109,46 @@ test("browser SDK in Chrome", { skip: !CHROME && "no Chrome found (set CHROME_PA
     await ingest.close();
   }
 });
+
+test("browser SDK: eval'd code keeps function names; a dropped upload is retried", { skip: !CHROME && "no Chrome found (set CHROME_PATH)" }, async () => {
+  const { default: puppeteer } = await import("puppeteer-core");
+  let dropped = 0;
+  // the first upload's connection is cut, like a flaky network or HTTP/3 timeout
+  const ingest = await fakeServer();
+  const realEmit = ingest.server?.emit;
+  const site = http.createServer((req, res) => {
+    if (req.url === "/errorlens.min.js") { res.writeHead(200, { "Content-Type": "text/javascript" }); res.end(readFileSync(bundle)); return; }
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end(`<!doctype html><script src="/errorlens.min.js"></script><script>
+      ErrorLens.init({ dsn: ${JSON.stringify(ingest.dsn)}, allowUrls: [location.origin] });
+      setTimeout(function () { var fn = eval("(function applyBandScore(d) { return d.sections.length; })"); fn(undefined); }, 20);
+    </script>`);
+  });
+  await new Promise((r) => site.listen(0, "127.0.0.1", r));
+  // a proxy in front of the ingest server that drops the first connection
+  const proxy = http.createServer((req, res) => {
+    if (dropped++ === 0 && req.method === "POST") { req.socket.destroy(); return; }
+    const up = http.request({ host: "127.0.0.1", port: ingest.port, method: req.method, path: req.url, headers: req.headers }, (u) => { res.writeHead(u.statusCode, u.headers); u.pipe(res); });
+    req.pipe(up);
+  });
+  await new Promise((r) => proxy.listen(0, "127.0.0.1", r));
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox"] });
+  try {
+    const tab = await browser.newPage();
+    const proxied = ingest.dsn.replace(`:${ingest.port}/`, `:${proxy.address().port}/`);
+    await tab.evaluateOnNewDocument((d) => { window.__dsn = d; }, proxied);
+    const html = (await (await fetch(`http://127.0.0.1:${site.address().port}/`)).text()).replace(JSON.stringify(ingest.dsn), "window.__dsn");
+    await tab.goto(`http://127.0.0.1:${site.address().port}/`);
+    await tab.setContent(html, { waitUntil: "load" });
+    assert.ok(await ingest.waitFor(() => ingest.items("event").length > 0, 8000), "event arrives after the retry");
+    assert.ok(dropped >= 2, "first upload was dropped and retried");
+    const frames = ingest.items("event")[0].exception.values.at(-1).stacktrace.frames;
+    assert.ok(frames.some((f) => f.function === "applyBandScore" && f.in_app === false), JSON.stringify(frames));
+    void realEmit;
+  } finally {
+    await browser.close();
+    site.close();
+    proxy.close();
+    await ingest.close();
+  }
+});
