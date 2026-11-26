@@ -31,6 +31,7 @@ Or with a script tag (sets `window.ErrorLens`):
 - **Distributed traces**: same-origin requests get a `traceparent` header. To include other origins, list them in `tracePropagationTargets` (they must allow the header in CORS). To link a page load to the server request that rendered it, render `<meta name="traceparent" content="…">` (`getTraceparent()` in `@errorlenshq/node`).
 - **Noise filtered**: errors from browser extensions, cross-origin "Script error.", and `ResizeObserver` loop warnings are dropped. Use `allowUrls`/`denyUrls` to report only your own scripts.
 - **Reliable delivery**: reports use `fetch` with `keepalive` and are flushed when the tab is hidden, so errors right before navigation still arrive. Requests are CORS "simple" requests — no preflight round trip.
+- **Works on flaky networks**: a report that fails because of the network (offline, a dropped mobile connection) is retried, then kept in `localStorage` (up to 30 reports, for 24 hours) and sent 30 seconds later, when the device is back online, or on the next page load. HTTP error answers are never retried. Turn it off with `offlineQueue: false`.
 
 ## Capturing
 
@@ -56,6 +57,7 @@ Same as `@errorlenshq/node` (`sampleRate`, `tracesSampleRate`, `tracePropagation
 | `allowUrls` | Only report errors from scripts matching these strings/regexes |
 | `denyUrls` | Drop errors from scripts matching these |
 | `disabledIntegrations` | Any of `globalHandlers`, `dom`, `history`, `console`, `fetch`, `xhr`, `pageload` |
+| `offlineQueue` | Keep reports that couldn't be sent and send them later (default `true`) |
 
 ## License
 

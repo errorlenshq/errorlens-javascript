@@ -152,3 +152,58 @@ test("browser SDK: eval'd code keeps function names; a dropped upload is retried
     await ingest.close();
   }
 });
+
+test("browser SDK: reports that can't be sent are kept and sent on the next page load", { skip: !CHROME && "no Chrome found (set CHROME_PATH)" }, async () => {
+  const { default: puppeteer } = await import("puppeteer-core");
+  const ingest = await fakeServer();
+  let mode = "down"; // down: connections cut; busy: answers 429; up: passes through
+  let cut = 0;
+  const proxy = http.createServer((req, res) => {
+    if (req.method === "POST" && mode === "down") { cut++; req.socket.destroy(); return; }
+    if (req.method === "POST" && mode === "busy") { req.resume(); res.writeHead(429, { "Access-Control-Allow-Origin": "*", "Retry-After": "1" }); res.end(); return; }
+    const up = http.request({ host: "127.0.0.1", port: ingest.port, method: req.method, path: req.url, headers: req.headers }, (u) => { res.writeHead(u.statusCode, u.headers); u.pipe(res); });
+    req.pipe(up);
+  });
+  await new Promise((r) => proxy.listen(0, "127.0.0.1", r));
+  const dsn = ingest.dsn.replace(`:${ingest.port}/`, `:${proxy.address().port}/`);
+  const site = http.createServer((req, res) => {
+    if (req.url === "/errorlens.min.js") { res.writeHead(200, { "Content-Type": "text/javascript" }); res.end(readFileSync(bundle)); return; }
+    const fail = req.url.includes("fail=");
+    res.writeHead(200, { "Content-Type": "text/html" });
+    res.end(`<!doctype html><script src="/errorlens.min.js"></script><script>
+      ErrorLens.init({ dsn: ${JSON.stringify(dsn)} });
+      ${fail ? `setTimeout(function () { throw new Error("kept while offline " + location.search); }, 20);` : ""}
+    </script>`);
+  });
+  await new Promise((r) => site.listen(0, "127.0.0.1", r));
+  const origin = `http://127.0.0.1:${site.address().port}`;
+  const browser = await puppeteer.launch({ executablePath: CHROME, headless: true, args: ["--no-sandbox"] });
+  try {
+    const tab = await browser.newPage();
+    const queued = () => tab.evaluate(() => JSON.parse(localStorage.getItem("errorlens:queue") || "[]").length);
+
+    // 1. network down: first try + retry are cut, then the report is kept
+    await tab.goto(`${origin}/?fail=down`);
+    await new Promise((r) => setTimeout(r, 3000));
+    assert.ok(cut >= 2, `upload tried and retried (cut ${cut})`);
+    assert.equal(await queued(), 1, "kept in localStorage");
+    assert.equal(ingest.items("event").length, 0);
+
+    // 2. an HTTP error answer is not kept
+    mode = "busy";
+    await tab.goto(`${origin}/?fail=busy`);
+    await new Promise((r) => setTimeout(r, 1500));
+    assert.equal(await queued(), 1, "429 answers are not queued");
+
+    // 3. network back: the next page load sends what was kept
+    mode = "up";
+    await tab.goto(`${origin}/`);
+    assert.ok(await ingest.waitFor(() => ingest.items("event").some((e) => /kept while offline \?fail=down/.test(JSON.stringify(e))), 10000), "kept report delivered");
+    assert.equal(await queued(), 0, "queue emptied");
+  } finally {
+    await browser.close();
+    site.close();
+    proxy.close();
+    await ingest.close();
+  }
+});

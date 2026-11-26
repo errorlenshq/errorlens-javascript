@@ -9,10 +9,10 @@ import {
   instrumentConsole, instrumentDom, instrumentFetch, instrumentGlobalHandlers, instrumentHistory,
   instrumentPageLoad, instrumentXhr, navigationTracer,
 } from "./integrations.js";
-import { browserTransport } from "./transport.js";
+import { browserTransport, setOfflineQueue, startQueue } from "./transport.js";
 
 export * from "@errorlenshq/core";
-export const VERSION = "1.0.3";
+export const VERSION = "1.0.4";
 
 export interface BrowserOptions extends Options {
   /** Send console.* output as logs too (needs enableLogs). Breadcrumbs are always recorded. */
@@ -21,6 +21,8 @@ export interface BrowserOptions extends Options {
   allowUrls?: (string | RegExp)[];
   /** Script URLs whose errors are dropped (in addition to browser extensions). */
   denyUrls?: (string | RegExp)[];
+  /** Keep reports that couldn't be sent (offline, flaky network) in localStorage and send them later. Default true. */
+  offlineQueue?: boolean;
 }
 
 const EXTENSION = /^(?:chrome|moz|safari(?:-web)?|ms-browser)-extension:\/\/|^webkit-masked-url:/;
@@ -118,6 +120,9 @@ export function init(options: BrowserOptions = {}): Client {
     if (names.includes("fetch")) instrumentFetch();
     if (names.includes("xhr")) instrumentXhr();
     if (tracing && names.includes("pageload")) instrumentPageLoad(client);
+    // Reports an earlier page couldn't send (offline, a dropped connection) go out once this page has loaded.
+    setOfflineQueue(opts.offlineQueue !== false);
+    if (opts.offlineQueue !== false && opts.transport === browserTransport) startQueue();
     // Send what is queued when the tab is hidden or closed (keepalive lets it finish).
     addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") void client.flush(0); });
   }
