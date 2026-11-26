@@ -1,21 +1,43 @@
 {
   "name": "@errorlenshq/core",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Shared core of the ErrorLens JavaScript SDKs.",
   "license": "MIT",
   "homepage": "https://errorlens.io/docs/",
-  "repository": { "type": "git", "url": "git+https://github.com/errorlenshq/errorlens-javascript.git", "directory": "packages/core" },
-  "bugs": { "url": "https://github.com/errorlenshq/errorlens-javascript/issues" },
-  "keywords": ["errorlens", "error tracking", "monitoring", "tracing"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/errorlenshq/errorlens-javascript.git",
+    "directory": "packages/core"
+  },
+  "bugs": {
+    "url": "https://github.com/errorlenshq/errorlens-javascript/issues"
+  },
+  "keywords": [
+    "errorlens",
+    "error tracking",
+    "monitoring",
+    "tracing"
+  ],
   "type": "module",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/esm/index.d.ts", "import": "./dist/esm/index.js", "require": "./dist/cjs/index.js" }
+    ".": {
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "sideEffects": false,
-  "scripts": { "build": "node ../../scripts/build.mjs" },
-  "publishConfig": { "access": "public" }
+  "scripts": {
+    "build": "node ../../scripts/build.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

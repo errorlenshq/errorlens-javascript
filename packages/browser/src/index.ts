@@ -12,7 +12,7 @@ import {
 import { browserTransport } from "./transport.js";
 
 export * from "@errorlenshq/core";
-export const VERSION = "1.0.0";
+export const VERSION = "1.0.1";
 
 export interface BrowserOptions extends Options {
   /** Send console.* output as logs too (needs enableLogs). Breadcrumbs are always recorded. */

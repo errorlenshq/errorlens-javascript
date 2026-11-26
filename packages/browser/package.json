@@ -1,6 +1,6 @@
 {
   "name": "@errorlenshq/browser",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ErrorLens for browsers: errors, breadcrumbs, page-load tracing and logs. No dependencies.",
   "license": "MIT",
   "homepage": "https://errorlens.io/docs/",
@@ -40,7 +40,7 @@
   ],
   "sideEffects": false,
   "dependencies": {
-    "@errorlenshq/core": "1.0.0"
+    "@errorlenshq/core": "1.0.1"
   },
   "scripts": {
     "build": "node ../../scripts/build.mjs && node ../../scripts/bundle.mjs"
